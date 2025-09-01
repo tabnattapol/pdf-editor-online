@@ -1,69 +1,90 @@
-# React + TypeScript + Vite
+# PDF Editor Online
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based PDF editor with text annotations, page reordering, and Thai language support built with React and Fabric.js.
 
-Currently, two official plugins are available:
+🔗 **Repository**: [https://github.com/tabnattapol/pdf-editor-online](https://github.com/tabnattapol/pdf-editor-online)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## Expanding the ESLint configuration
+✨ **Core Features**
+- 📄 PDF upload and display with continuous scrolling
+- ✏️ Text annotations with customizable font, size, and color
+- 🔄 Page reordering with drag-and-drop interface
+- 🔍 Zoom controls (zoom in/out, fit to width)
+- 💾 Export PDF with all annotations preserved
+- 🇹🇭 Thai language support with proper font rendering
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Tech Stack
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- **Frontend**: React 18 + TypeScript
+- **PDF Rendering**: PDF.js
+- **Canvas Editing**: Fabric.js
+- **PDF Manipulation**: pdf-lib
+- **Styling**: Tailwind CSS
+- **Build Tool**: Vite
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+## Installation
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. Clone the repository:
+```bash
+git clone https://github.com/tabnattapol/pdf-editor-online.git
+cd pdf-editor-online
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+2. Install dependencies:
+```bash
+npm install
 ```
+
+3. Run development server:
+```bash
+npm run dev
+```
+
+4. Open browser at `http://localhost:5173`
+
+## Usage
+
+1. **Upload PDF**: Click "Select PDF file" or drag and drop a PDF
+2. **Add Text**: 
+   - Click the "Add Text" button in the toolbar
+   - Click anywhere on the PDF to place text
+   - Double-click text to edit
+3. **Reorder Pages**: 
+   - Click "Reorder Pages" button
+   - Drag and drop pages in the modal
+   - Click "Apply Changes"
+4. **Save PDF**: Click "Save PDF" to download with annotations
+
+## Project Structure
+
+```
+src/
+├── components/
+│   ├── FabricPDFEditor/     # Main editor with Fabric.js
+│   │   ├── FabricPDFEditor.tsx
+│   │   ├── FabricToolbar.tsx
+│   │   ├── FabricZoomControls.tsx
+│   │   └── PageReorderModal.tsx
+│   └── UI/                  # Reusable UI components
+├── utils/                   # Helper functions
+├── types/                   # TypeScript definitions
+└── App.tsx                  # Root component
+```
+
+## Known Issues
+
+- Thai text with tone marks (วรรณยุกต์) may have spacing issues due to pdf-lib limitations
+- Large PDF files (>25MB) may cause performance issues
+
+## Contributing
+
+Pull requests are welcome! For major changes, please open an issue first.
+
+## License
+
+MIT
+
+## Author
+
+[@tabnattapol](https://github.com/tabnattapol)
