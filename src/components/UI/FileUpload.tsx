@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
 import { Upload } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
 import { validatePDFFile } from '../../utils/fileValidation';
 
 interface FileUploadProps {
@@ -73,7 +73,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect }) => {
             Browse Files
           </span>
         </label>
-        <p className="text-sm text-gray-400 mt-4">Maximum file size: 25MB</p>
+        <p className="text-sm text-gray-400 mt-4">Maximum file size: 1G</p>
       </div>
       {error && (
         <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-600">

@@ -6,6 +6,7 @@ import { FileUpload } from '../UI/FileUpload';
 import { FabricToolbar } from './FabricToolbar';
 import { FabricZoomControls } from './FabricZoomControls';
 import { PageReorderModal } from './PageReorderModal';
+import { Modal, useModal } from '../UI/Modal';
 import { downloadFile } from '../../utils/downloadHelper';
 import { simpleSavePDF } from '../../utils/simplePdfSave';
 import { imageSavePDF } from '../../utils/imagePdfSave';
@@ -36,6 +37,29 @@ export const FabricPDFEditor: React.FC = () => {
     color: '#000000',
     fontFamily: 'Helvetica'
   });
+  const [selectedTextObject, setSelectedTextObject] = useState<IText | null>(null);
+  
+  // Debug selected text object changes
+  useEffect(() => {
+    console.log('selectedTextObject state changed:', selectedTextObject);
+    if (selectedTextObject) {
+      console.log('Selected text properties:', {
+        text: selectedTextObject.text,
+        fontSize: selectedTextObject.fontSize,
+        color: selectedTextObject.fill,
+        fontFamily: selectedTextObject.fontFamily
+      });
+    }
+  }, [selectedTextObject]);
+  const [, forceUpdate] = useState({});
+  
+  // Modal state
+  const { modalState, showModal, closeModal } = useModal();
+  
+  // Debug selected text object changes
+  useEffect(() => {
+    console.log('selectedTextObject state changed to:', selectedTextObject);
+  }, [selectedTextObject]);
 
   // Initialize Fabric canvas when file is loaded
   useEffect(() => {
@@ -72,6 +96,10 @@ export const FabricPDFEditor: React.FC = () => {
       fill: textSettings.color,
       fontFamily: textSettings.fontFamily,
       editable: true,
+      selectable: true,  // Ensure it's selectable
+      evented: true,      // Ensure it receives events
+      hasControls: true,  // Show controls
+      hasBorders: true,   // Show borders
       width: 200
     });
 
@@ -79,6 +107,10 @@ export const FabricPDFEditor: React.FC = () => {
     fabricCanvasRef.current.setActiveObject(text);
     text.enterEditing();
     text.selectAll();
+    
+    // Update selected text object immediately
+    setSelectedTextObject(text);
+    console.log('Text added and selected:', text);
   }, [textSettings]);
 
   // Handle mouse events for adding text
@@ -89,6 +121,35 @@ export const FabricPDFEditor: React.FC = () => {
     
     const handleMouseDown = (options: any) => {
       console.log('Mouse down event:', { isAddingText, target: options.target });
+      
+      // Check if we clicked on a text object
+      if (options.target && options.target.type === 'i-text') {
+        const textObj = options.target as IText;
+        console.log('Clicked on text object:', textObj);
+        console.log('Setting selectedTextObject to:', textObj);
+        setSelectedTextObject(textObj);
+        // Update text settings to match selected object
+        const newSettings = {
+          fontSize: textObj.fontSize as number || 16,
+          color: textObj.fill as string || '#000000',
+          fontFamily: textObj.fontFamily || 'Helvetica'
+        };
+        console.log('Updating text settings to:', newSettings);
+        setTextSettings(newSettings);
+        
+        // Force canvas to set this as active object
+        canvas.setActiveObject(textObj);
+        canvas.renderAll();
+        
+        // Force re-render to update UI
+        forceUpdate({});
+      } else if (!options.target) {
+        // Clicked on empty space - clear selection
+        console.log('Clicked on empty space, clearing selection');
+        setSelectedTextObject(null);
+      }
+      
+      // Handle adding new text
       if (isAddingText && !options.target) {
         const pointer = canvas.getPointer(options.e);
         console.log('Adding text at:', pointer);
@@ -102,7 +163,94 @@ export const FabricPDFEditor: React.FC = () => {
     return () => {
       canvas.off('mouse:down', handleMouseDown);
     };
-  }, [isAddingText, addTextAtPosition]);
+  }, [isAddingText, addTextAtPosition, textSettings]);
+
+  // Handle text selection events - simplified approach
+  useEffect(() => {
+    if (!fabricCanvasRef.current) return;
+    
+    const canvas = fabricCanvasRef.current;
+    console.log('Setting up simplified selection event listeners');
+    
+    // Single unified handler for selection
+    const handleSelection = () => {
+      const activeObj = canvas.getActiveObject();
+      console.log('Selection changed, active object:', activeObj);
+      
+      if (activeObj && activeObj.type === 'i-text') {
+        const textObj = activeObj as IText;
+        console.log('Text object is selected:', {
+          text: textObj.text,
+          fontSize: textObj.fontSize,
+          color: textObj.fill,
+          fontFamily: textObj.fontFamily
+        });
+        
+        setSelectedTextObject(textObj);
+        // Update text settings to match selected object
+        setTextSettings({
+          fontSize: textObj.fontSize as number || 16,
+          color: textObj.fill as string || '#000000',
+          fontFamily: textObj.fontFamily || 'Helvetica'
+        });
+      } else {
+        console.log('No text object selected');
+        setSelectedTextObject(null);
+      }
+    };
+    
+    // Listen for any selection change
+    canvas.on('selection:created', handleSelection);
+    canvas.on('selection:updated', handleSelection);
+    canvas.on('selection:cleared', () => {
+      console.log('Selection cleared');
+      setSelectedTextObject(null);
+    });
+    
+    return () => {
+      canvas.off('selection:created');
+      canvas.off('selection:updated');
+      canvas.off('selection:cleared');
+    };
+  }, []);
+
+  // Delete selected text - moved here before keyboard shortcuts
+  const deleteSelectedText = useCallback(() => {
+    if (!fabricCanvasRef.current) return;
+    
+    // Get the currently active object
+    const activeObject = fabricCanvasRef.current.getActiveObject();
+    console.log('Deleting active object:', activeObject);
+    
+    if (!activeObject || activeObject.type !== 'i-text') {
+      console.log('No text object to delete');
+      return;
+    }
+    
+    fabricCanvasRef.current.remove(activeObject);
+    fabricCanvasRef.current.discardActiveObject();
+    setSelectedTextObject(null);
+    fabricCanvasRef.current.renderAll();
+    console.log('Text deleted successfully');
+  }, []);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Delete key or Backspace to delete selected text
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedTextObject) {
+        // Only delete if we're not editing text
+        if (!selectedTextObject.isEditing) {
+          deleteSelectedText();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [selectedTextObject, deleteSelectedText]);
 
   // Update text adding mode cursor
   useEffect(() => {
@@ -313,6 +461,50 @@ export const FabricPDFEditor: React.FC = () => {
     setZoomLevel(1);
   };
 
+  // Update selected text properties
+  const updateSelectedText = useCallback((updates: Partial<typeof textSettings>) => {
+    console.log('updateSelectedText called with:', updates);
+    
+    if (!fabricCanvasRef.current) {
+      console.log('No fabric canvas');
+      return;
+    }
+    
+    // Get the currently active object
+    const activeObject = fabricCanvasRef.current.getActiveObject();
+    console.log('Active object from canvas:', activeObject);
+    
+    if (!activeObject || activeObject.type !== 'i-text') {
+      console.log('No text object selected or wrong type');
+      return;
+    }
+    
+    const textObj = activeObject as IText;
+    
+    if (updates.color !== undefined) {
+      textObj.set('fill', updates.color);
+      console.log('Updated color to:', updates.color);
+    }
+    if (updates.fontSize !== undefined) {
+      textObj.set('fontSize', updates.fontSize);
+      console.log('Updated fontSize to:', updates.fontSize);
+    }
+    if (updates.fontFamily !== undefined) {
+      textObj.set('fontFamily', updates.fontFamily);
+      console.log('Updated fontFamily to:', updates.fontFamily);
+    }
+    
+    // Mark the object as dirty and re-render
+    textObj.setCoords();
+    fabricCanvasRef.current.renderAll();
+    
+    // Update the text settings state as well
+    setTextSettings(prev => ({ ...prev, ...updates }));
+    
+    // Force update selected text object to trigger re-render
+    setSelectedTextObject(textObj);
+  }, []);
+
   // Handle page reordering
   const handlePageReorder = async (newOrder: number[]) => {
     if (!pdfDoc || !originalPdfBytes || !fabricCanvasRef.current) return;
@@ -411,10 +603,10 @@ export const FabricPDFEditor: React.FC = () => {
       }
       
       canvas.renderAll();
-      alert('Pages reordered successfully! Text annotations have been preserved.');
+      showModal('Pages reordered successfully! Text annotations have been preserved.', 'success');
     } catch (error) {
       console.error('Error reordering pages:', error);
-      alert('Failed to reorder pages. Please try again.');
+      showModal('Failed to reorder pages. Please try again.', 'error');
     }
   };
 
@@ -422,10 +614,11 @@ export const FabricPDFEditor: React.FC = () => {
   const handleSave = async () => {
     if (!originalPdfBytes || !fabricCanvasRef.current || !allPagesData.length) return;
 
-    const filename = prompt('Enter filename:', 'edited-document.pdf');
-    if (!filename) return;
+    // For now, use a default filename. In future, you could create a filename input modal
+    const filename = 'edited-document.pdf';
 
     try {
+      showModal('Saving PDF...', 'info');
       // Check if there's Thai text
       const fabricObjects = fabricCanvasRef.current.getObjects();
       const hasThaiText = fabricObjects.some(obj => {
@@ -454,9 +647,15 @@ export const FabricPDFEditor: React.FC = () => {
           filename
         });
       }
+      
+      // Close loading modal and show success
+      closeModal();
+      setTimeout(() => {
+        showModal('PDF saved successfully!', 'success');
+      }, 100);
     } catch (error) {
       console.error('Error saving PDF:', error);
-      alert('Error saving PDF: ' + (error as Error).message);
+      showModal('Error saving PDF: ' + (error as Error).message, 'error');
     }
   };
 
@@ -503,6 +702,9 @@ export const FabricPDFEditor: React.FC = () => {
             onToggleAddText={() => setIsAddingText(!isAddingText)}
             textSettings={textSettings}
             onTextSettingsChange={setTextSettings}
+            selectedTextObject={selectedTextObject}
+            onUpdateSelectedText={updateSelectedText}
+            onDeleteSelectedText={deleteSelectedText}
           />
 
           {/* Main Canvas Area */}
@@ -536,6 +738,17 @@ export const FabricPDFEditor: React.FC = () => {
           onReorder={handlePageReorder}
         />
       )}
+      
+      {/* Alert Modal */}
+      <Modal
+        isOpen={modalState.isOpen}
+        onClose={closeModal}
+        message={modalState.message}
+        type={modalState.type}
+        title={modalState.title}
+        onConfirm={modalState.onConfirm}
+        showCancel={modalState.showCancel}
+      />
     </div>
   );
 };
