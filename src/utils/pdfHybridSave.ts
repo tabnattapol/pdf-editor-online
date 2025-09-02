@@ -2,7 +2,6 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { 
   initializePdfMake, 
-  createTextLayerPDF, 
   convertFabricToAnnotations 
 } from './pdfmakeRenderer';
 import { downloadFile } from './downloadHelper';

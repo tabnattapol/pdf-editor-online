@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, GripVertical, Check } from 'lucide-react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 
 interface PageReorderModalProps {
   isOpen: boolean;

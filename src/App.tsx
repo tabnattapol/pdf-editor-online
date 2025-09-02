@@ -1,4 +1,3 @@
-import React from 'react'
 import { FabricPDFEditor } from './components/FabricPDFEditor/FabricPDFEditor'
 
 function App() {

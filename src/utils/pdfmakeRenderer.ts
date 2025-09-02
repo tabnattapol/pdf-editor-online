@@ -11,10 +11,8 @@ if (typeof (pdfFonts as any).pdfMake !== 'undefined') {
   pdfMake.vfs = pdfMake.vfs || {};
 }
 import { IText } from 'fabric';
-import { initializeThaiFonts, THSarabunBase64 } from './thaiFonts';
+import { initializeThaiFonts } from './thaiFonts';
 
-// Virtual file system for fonts
-const vfs: any = {};
 
 interface TextAnnotation {
   text: string;
@@ -136,7 +134,7 @@ export async function createTextLayerPDF(
       const font = isThai ? 'Sarabun' : 'Roboto';
       
       // Convert color
-      const rgb = hexToRgb(annotation.color);
+      hexToRgb(annotation.color); // Validate color format
       const colorHex = annotation.color.startsWith('#') ? annotation.color : `#${annotation.color}`;
       
       // Add text with absolute positioning

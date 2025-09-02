@@ -1,11 +1,5 @@
 import { useCallback } from 'react';
 
-interface PDFPageInfo {
-  width: number;
-  height: number;
-  scale: number;
-}
-
 export const usePDFCoordinates = () => {
   // Convert screen coordinates to PDF coordinates
   const screenToPDF = useCallback((

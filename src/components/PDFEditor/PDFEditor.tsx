@@ -8,12 +8,11 @@ import { Toolbar } from './Toolbar';
 import { PageReorderModal } from './PageReorderModal';
 import type { TextAnnotation } from '../../types/pdf.types';
 import { downloadFile } from '../../utils/downloadHelper';
-import { convertScreenToPDFCoordinates } from '../../utils/pdfCoordinates';
 
 export const PDFEditor: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [pdfDoc, setPdfDoc] = useState<PDFDocument | null>(null);
-  const [numPages, setNumPages] = useState(0);
+  const [, setNumPages] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [annotations, setAnnotations] = useState<TextAnnotation[]>([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
@@ -93,11 +92,11 @@ export const PDFEditor: React.FC = () => {
       let pages = newPdfDoc.getPages();
       
       // Create a mapping for annotations if pages are reordered
-      let pageMapping = null;
+      let pageMapping: Record<number, number> | null = null;
       if (pageOrder.length > 0) {
         // Create new document with reordered pages
         const reorderedPdfDoc = await PDFDocument.create();
-        pageMapping = {};
+        pageMapping = {} as Record<number, number>;
         
         for (let newIndex = 0; newIndex < pageOrder.length; newIndex++) {
           const originalIndex = pageOrder[newIndex];
@@ -166,7 +165,7 @@ export const PDFEditor: React.FC = () => {
         
         // If pages were reordered, map to the new position
         if (pageMapping && pageMapping[annotation.pageIndex] !== undefined) {
-          targetPageIndex = pageMapping[annotation.pageIndex];
+          targetPageIndex = pageMapping[annotation.pageIndex] ?? 0;
         }
         
         // Skip if page index is out of bounds

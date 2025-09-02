@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { LoadingSpinner } from '../UI/LoadingSpinner';
 import { TextAnnotation } from './TextAnnotation';
@@ -66,10 +66,10 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
     x: 0,
     y: 0
   });
-  const [pageDimensions, setPageDimensions] = useState<PageDimensions>({});
+  const [pageDimensions] = useState<PageDimensions>({});
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<{ [key: number]: HTMLDivElement }>({});
-  const { screenToPDF, pdfToScreen, calculatePDFFontSize } = usePDFCoordinates();
+  const { screenToPDF, pdfToScreen } = usePDFCoordinates();
 
   useEffect(() => {
     const updatePageWidth = () => {
@@ -100,9 +100,9 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
     const screenY = e.clientY - rect.top;
     
     // Get actual page dimensions
-    const pageElement = e.currentTarget;
-    const displayWidth = pageElement.offsetWidth;
-    const displayHeight = pageElement.offsetHeight;
+    // const pageElement = e.currentTarget;
+    // const displayWidth = (pageElement as HTMLDivElement).offsetWidth;
+    // const displayHeight = (pageElement as HTMLDivElement).offsetHeight;
     
     // PDF standard dimensions (points)
     const pdfDims = pageDimensions[pageIndex] || { width: 595.28, height: 841.89 };
@@ -137,8 +137,8 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
       return;
     }
     
-    const displayWidth = pageElement.offsetWidth;
-    const displayHeight = pageElement.offsetHeight;
+    const displayWidth = (pageElement as HTMLDivElement).offsetWidth;
+    const displayHeight = (pageElement as HTMLDivElement).offsetHeight;
     
     // Get PDF page dimensions
     const pdfWidth = editingState.pageWidth || 595.28;
@@ -201,8 +201,8 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
     const pageElement = pageRefs.current[displayPageIndex];
     if (!pageElement) return null;
     
-    const displayWidth = pageElement.offsetWidth;
-    const displayHeight = pageElement.offsetHeight;
+    const displayWidth = (pageElement as HTMLDivElement).offsetWidth;
+    const displayHeight = (pageElement as HTMLDivElement).offsetHeight;
     
     return (
       <>

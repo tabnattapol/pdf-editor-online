@@ -7,7 +7,6 @@ import { FabricToolbar } from './FabricToolbar';
 import { FabricZoomControls } from './FabricZoomControls';
 import { PageReorderModal } from './PageReorderModal';
 import { Modal, useModal } from '../UI/Modal';
-import { downloadFile } from '../../utils/downloadHelper';
 import { simpleSavePDF } from '../../utils/simplePdfSave';
 import { imageSavePDF } from '../../utils/imagePdfSave';
 import { Shuffle } from 'lucide-react';
@@ -22,14 +21,14 @@ export const FabricPDFEditor: React.FC = () => {
   
   const [file, setFile] = useState<File | null>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
-  const [totalPages, setTotalPages] = useState(0);
+  const [, setTotalPages] = useState(0);
   const [allPagesData, setAllPagesData] = useState<any[]>([]);
   const [isAddingText, setIsAddingText] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [originalPdfBytes, setOriginalPdfBytes] = useState<Uint8Array | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
   const [showReorderModal, setShowReorderModal] = useState(false);
-  const [pageOrder, setPageOrder] = useState<number[]>([]);
+  const [, setPageOrder] = useState<number[]>([]);
   
   // Text settings
   const [textSettings, setTextSettings] = useState({
@@ -265,13 +264,15 @@ export const FabricPDFEditor: React.FC = () => {
     }
   }, [isAddingText]);
 
-  // Render PDF page
-  const renderPage = useCallback(async (pdf: any, pageNum: number, zoom?: number) => {
+  // Render PDF page - kept for reference but not currently used
+  // @ts-ignore - Function preserved for reference but not used
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _renderPage = useCallback(async (_pdf: any, _pageNum: number, _zoom?: number) => {
     console.log('renderPage called', { 
       hasFabricCanvas: !!fabricCanvasRef.current, 
       hasContainer: !!containerRef.current,
-      pageNum,
-      zoom 
+      pageNum: _pageNum,
+      zoom: _zoom 
     });
     if (!fabricCanvasRef.current || !containerRef.current) {
       console.error('Missing refs:', { 
@@ -281,8 +282,8 @@ export const FabricPDFEditor: React.FC = () => {
       return;
     }
 
-    const currentZoom = zoom ?? zoomLevel;
-    const page = await pdf.getPage(pageNum);
+    const currentZoom = _zoom ?? zoomLevel;
+    const page = await _pdf.getPage(_pageNum);
     const viewport = page.getViewport({ scale: 1 });
     
     // Calculate scale to fit container width
@@ -326,7 +327,7 @@ export const FabricPDFEditor: React.FC = () => {
       });
       canvas.renderAll();
     });
-  }, []);
+  }, [zoomLevel]);
 
   // Render all pages for continuous scrolling
   const renderAllPages = useCallback(async (pdf: any) => {
@@ -623,7 +624,8 @@ export const FabricPDFEditor: React.FC = () => {
       const fabricObjects = fabricCanvasRef.current.getObjects();
       const hasThaiText = fabricObjects.some(obj => {
         if (obj.type === 'i-text') {
-          const text = obj.text || '';
+          const textObj = obj as IText;
+          const text = textObj.text || '';
           return /[\u0E00-\u0E7F]/.test(text);
         }
         return false;
