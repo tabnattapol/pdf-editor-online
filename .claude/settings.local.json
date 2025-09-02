@@ -17,7 +17,10 @@
       "WebSearch",
       "mcp__playwright__browser_console_messages",
       "mcp__playwright__browser_snapshot",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(sed:*)",
+      "Bash(grep:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

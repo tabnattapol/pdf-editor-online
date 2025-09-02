@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Canvas, IText, FabricImage } from 'fabric';
 import * as pdfjsLib from 'pdfjs-dist';
-import { PDFDocument, rgb, StandardFonts, PDFFont } from 'pdf-lib';
-import fontkit from '@pdf-lib/fontkit';
-import { preprocessThaiText } from '../../utils/thaiTextRenderer';
+import { PDFDocument } from 'pdf-lib';
 import { FileUpload } from '../UI/FileUpload';
 import { FabricToolbar } from './FabricToolbar';
 import { FabricZoomControls } from './FabricZoomControls';
 import { PageReorderModal } from './PageReorderModal';
 import { downloadFile } from '../../utils/downloadHelper';
+import { simpleSavePDF } from '../../utils/simplePdfSave';
+import { imageSavePDF } from '../../utils/imagePdfSave';
 import { Shuffle } from 'lucide-react';
 
 // Configure PDF.js worker
@@ -426,230 +426,37 @@ export const FabricPDFEditor: React.FC = () => {
     if (!filename) return;
 
     try {
-      console.log('Original PDF bytes length:', originalPdfBytes.length);
-      
-      // Verify we have valid PDF data
-      if (originalPdfBytes.length === 0) {
-        throw new Error('PDF data is empty. Please reload the file.');
-      }
-      
-      // Check PDF header
-      const header = new TextDecoder().decode(originalPdfBytes.slice(0, 5));
-      console.log('PDF header:', header);
-      
-      if (!header.startsWith('%PDF')) {
-        throw new Error('Invalid PDF data. Please reload the file.');
-      }
-      
-      // Load original PDF
-      const pdfDoc = await PDFDocument.load(originalPdfBytes);
-      
-      // IMPORTANT: Register fontkit BEFORE embedding custom fonts
-      pdfDoc.registerFontkit(fontkit);
-      
-      // Get all pages
-      const pages = pdfDoc.getPages();
-      const canvas = fabricCanvasRef.current;
-      
-      // Embed standard fonts
-      const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const timesFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-      const courierFont = await pdfDoc.embedFont(StandardFonts.Courier);
-      
-      // Load Thai font for Unicode support - try multiple fonts
-      let thaiFont: any = null;
-      const fontUrls = [
-        '/fonts/IBMPlexSansThai-Regular.ttf',  // Best for complex Thai with tone marks
-        '/fonts/Garuda.ttf',                   // Good for Thai tone marks
-        '/fonts/Sarabun-Regular.ttf',          // Popular Thai font
-        '/fonts/NotoSansThai.ttf',             // Fallback option
-      ];
-      
-      for (const fontUrl of fontUrls) {
-        try {
-          console.log(`Trying to load font: ${fontUrl}`);
-          const fontResponse = await fetch(fontUrl);
-          if (!fontResponse.ok) {
-            console.warn(`Font not found: ${fontUrl}`);
-            continue;
-          }
-          const fontBytes = await fontResponse.arrayBuffer();
-          console.log(`Font bytes loaded from ${fontUrl}, size:`, fontBytes.byteLength);
-          
-          // Embed the custom font with fontkit support
-          thaiFont = await pdfDoc.embedFont(fontBytes);
-          console.log(`Thai font embedded successfully from ${fontUrl}`);
-          break; // Stop after first successful font
-        } catch (error) {
-          console.warn(`Failed to load font ${fontUrl}:`, error);
-        }
-      }
-      
-      if (!thaiFont) {
-        console.error('No Thai fonts could be loaded');
-        alert('Warning: Thai font could not be loaded. Thai text may not display correctly.');
-      }
-      
-      // Get all text annotations from Fabric
-      const objects = canvas.getObjects();
-      console.log(`Found ${objects.length} objects on canvas`);
-      
-      // Process text annotations for each page
-      for (const obj of objects) {
+      // Check if there's Thai text
+      const fabricObjects = fabricCanvasRef.current.getObjects();
+      const hasThaiText = fabricObjects.some(obj => {
         if (obj.type === 'i-text') {
-          const textObj = obj as IText;
-          // Get the actual text content from Fabric.js IText object
-          // IMPORTANT: Fabric.js might store text with special characters
-          const rawText = textObj.text || '';
-          
-          // Skip completely empty text objects
-          if (!rawText || rawText.length === 0) continue;
-          
-          // Clean up any potential hidden characters but preserve Thai text
-          // Remove zero-width spaces and other invisible characters that might cause issues
-          const text = rawText.replace(/[\u200B-\u200D\uFEFF]/g, '');
-          
-          console.log(`Processing text object:`);
-          console.log(`  Raw text: "${rawText}"`);
-          console.log(`  Cleaned text: "${text}"`);
-          console.log(`  Length: raw=${rawText.length}, cleaned=${text.length}`);
-          console.log(`  Has newlines: ${text.includes('\n')}`);
-          
-          // Check for any unusual characters
-          const unusualChars = Array.from(rawText).filter(c => {
-            const code = c.charCodeAt(0);
-            return code < 32 && code !== 10; // Control chars except newline
-          });
-          if (unusualChars.length > 0) {
-            console.warn(`Found unusual characters:`, unusualChars.map(c => c.charCodeAt(0)));
-          }
-          
-          // Find which page this text belongs to based on Y position
-          let targetPageIndex = 0;
-          let relativeY = textObj.top || 0;
-          
-          for (let i = 0; i < allPagesData.length; i++) {
-            const pageData = allPagesData[i];
-            if (relativeY >= pageData.yOffset && 
-                relativeY < pageData.yOffset + pageData.height) {
-              targetPageIndex = i;
-              relativeY = relativeY - pageData.yOffset;
-              break;
-            }
-          }
-          
-          // Get the target page
-          if (targetPageIndex >= pages.length) continue;
-          const page = pages[targetPageIndex];
-          const { width: pageWidth, height: pageHeight } = page.getSize();
-          const pageData = allPagesData[targetPageIndex];
-          
-          // Calculate scale factors for this specific page
-          const scaleX = pageWidth / pageData.width;
-          const scaleY = pageHeight / pageData.height;
-          
-          // Convert coordinates
-          const pdfX = (textObj.left || 0) * scaleX;
-          const pdfY = pageHeight - (relativeY + (textObj.fontSize || 16)) * scaleY;
-          
-          // Check if text contains Thai characters or other non-ASCII
-          const hasThai = /[\u0E00-\u0E7F]/.test(text);
-          const hasNonAscii = /[^\x00-\x7F]/.test(text);
-          
-          // Check for Thai tone marks and vowels (these need special handling)
-          const hasThaiToneMarks = /[\u0E31-\u0E3A\u0E47-\u0E4E]/.test(text);
-          if (hasThaiToneMarks) {
-            console.log('Text contains Thai tone marks/vowels - using special handling');
-          }
-          
-          // Select appropriate font
-          let font = helveticaFont;
-          if ((hasThai || hasNonAscii) && thaiFont) {
-            // Use Thai font for Thai text or other Unicode
-            font = thaiFont;
-            console.log(`Using Thai font for text: "${text.substring(0, 20)}..."`);
-          } else {
-            // Use standard fonts for ASCII text
-            if (textObj.fontFamily === 'Times-Roman') font = timesFont;
-            if (textObj.fontFamily === 'Courier') font = courierFont;
-          }
-          
-          // Parse color
-          const color = textObj.fill as string || '#000000';
-          const hexColor = color.replace('#', '');
-          const r = parseInt(hexColor.substr(0, 2), 16) / 255;
-          const g = parseInt(hexColor.substr(2, 2), 16) / 255;
-          const b = parseInt(hexColor.substr(4, 2), 16) / 255;
-          
-          // Draw text - handle multi-line text properly
-          const lines = text.split('\n');
-          lines.forEach((line, index) => {
-            // For Thai text with tone marks, normalize the Unicode
-            let processedLine = line;
-            
-            if (hasThai) {
-              // Preprocess Thai text to handle tone marks better
-              processedLine = preprocessThaiText(line);
-              console.log(`Original Thai text: "${line}"`);
-              console.log(`Preprocessed Thai text: "${processedLine}"`);
-              
-              // For debugging: show character codes
-              const chars = Array.from(processedLine);
-              console.log(`Characters: ${chars.join(', ')}`);
-              console.log(`Character codes: ${chars.map(c => '0x' + c.charCodeAt(0).toString(16).toUpperCase()).join(', ')}`);
-            } else if (!hasNonAscii) {
-              // Only trim for pure ASCII text
-              processedLine = line.trim();
-            }
-            
-            // Skip completely empty lines only if there are multiple lines
-            if (processedLine.length === 0 && lines.length > 1) {
-              return; // Skip empty lines in multi-line text
-            }
-            
-            try {
-              // Log the text being saved for debugging
-              console.log(`Saving text line ${index}: "${processedLine}"`);
-              console.log(`Character codes:`, Array.from(processedLine).map(c => c.charCodeAt(0)));
-              
-              page.drawText(processedLine, {
-                x: pdfX,
-                y: pdfY - (index * (textObj.fontSize || 16) * 1.2 * scaleY),
-                size: (textObj.fontSize || 16) * scaleY,
-                font: font,
-                color: rgb(r, g, b)
-              });
-            } catch (encodeError) {
-              console.warn(`Could not encode text "${processedLine}", trying fallback:`, encodeError);
-              // Try with basic font as fallback
-              if (font !== helveticaFont) {
-                try {
-                  // Replace non-ASCII characters with placeholders
-                  const asciiLine = processedLine.replace(/[^\x00-\x7F]/g, '?');
-                  page.drawText(asciiLine, {
-                    x: pdfX,
-                    y: pdfY - (index * (textObj.fontSize || 16) * 1.2 * scaleY),
-                    size: (textObj.fontSize || 16) * scaleY,
-                    font: helveticaFont,
-                    color: rgb(r, g, b)
-                  });
-                  console.log(`Fallback text saved: "${asciiLine}"`);
-                } catch (fallbackError) {
-                  console.error('Could not draw text even with fallback:', fallbackError);
-                }
-              }
-            }
-          });
+          const text = obj.text || '';
+          return /[\u0E00-\u0E7F]/.test(text);
         }
-      }
+        return false;
+      });
       
-      // Save PDF
-      const pdfBytes = await pdfDoc.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      downloadFile(blob, filename);
+      if (hasThaiText) {
+        // Use image-based save for proper Thai rendering
+        console.log('Thai text detected, using image-based rendering');
+        await imageSavePDF({
+          originalPdfBytes,
+          fabricObjects,
+          allPagesData,
+          filename
+        });
+      } else {
+        // Use simple save for non-Thai text
+        await simpleSavePDF({
+          originalPdfBytes,
+          fabricObjects,
+          allPagesData,
+          filename
+        });
+      }
     } catch (error) {
       console.error('Error saving PDF:', error);
-      alert('Error saving PDF. Please try again.');
+      alert('Error saving PDF: ' + (error as Error).message);
     }
   };
 
