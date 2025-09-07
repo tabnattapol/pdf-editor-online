@@ -5,6 +5,7 @@ import * as pdfjs from 'pdfjs-dist'
 import workerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { annotationRectToView, getViewSize, viewPointToPdf, viewRectToPdf } from './lib/pdf'
+import KonvaHighlights from './components/KonvaHighlights'
 import { cn } from './lib/utils'
 import type { Annotation, PdfPageInfo } from './types'
 
@@ -29,7 +30,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [tool, setTool] = useState<'select' | 'highlight' | 'text'>('select')
   const [drawingHL, setDrawingHL] = useState<{ id: string; startPdfX: number; startPdfY: number } | null>(null)
-  const [drawingText, setDrawingText] = useState<{ id: string; startPdfX: number; startPdfY: number } | null>(null)
+  // text placement handled by Konva layer
   const [exportScale, setExportScale] = useState(2)
   const [exportFormat, setExportFormat] = useState<'jpeg' | 'png'>('jpeg')
   const [quality, setQuality] = useState(1)
@@ -183,17 +184,25 @@ export default function App() {
           ctx.fillRect(r.left, r.top, r.width, r.height)
           ctx.restore()
         } else if (a.type === 'text') {
-          // Draw text with annotation rotation around its box center
+          // Draw multi-line wrapped text centered inside its box
           const r = annotationRectToView(a, p, scale)
           ctx.save()
           ctx.translate(r.left + r.width / 2, r.top + r.height / 2)
           const rad = ((a.rotation || 0) * Math.PI) / 180
           ctx.rotate(rad)
+          const fontPx = (a.fontSize || 16) * scale
+          const lineHeight = fontPx * 1.35
           ctx.fillStyle = a.color || '#111'
-          ctx.font = `${(a.fontSize || 16) * scale}px sans-serif`
+          ctx.font = `${fontPx}px sans-serif`
           ctx.textBaseline = 'middle'
           ctx.textAlign = 'center'
-          ctx.fillText(a.text || '', 0, 0)
+          const lines = wrapTextLines(ctx, a.text || '', r.width)
+          const totalH = lines.length * lineHeight
+          let y = -totalH / 2 + lineHeight / 2
+          for (const line of lines) {
+            ctx.fillText(line, 0, y)
+            y += lineHeight
+          }
           ctx.restore()
         } else if (a.type === 'image' && a.imageDataUrl) {
           const r = annotationRectToView(a, p, scale)
@@ -224,6 +233,42 @@ export default function App() {
     a.download = 'edited.pdf'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  function wrapTextLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+    if (!text) return ['']
+    const paragraphs = text.split(/\r?\n/)
+    const lines: string[] = []
+    for (const para of paragraphs) {
+      const words = para.split(/(\s+)/).filter(w => w.length > 0)
+      if (words.length === 0) { lines.push(''); continue }
+      let line = ''
+      for (const token of words) {
+        const test = line + token
+        const w = ctx.measureText(test).width
+        if (w <= maxWidth || line === '') {
+          line = test
+        } else {
+          // if single token is too long, break by chars
+          if (ctx.measureText(token).width > maxWidth) {
+            for (const ch of token) {
+              const test2 = line + ch
+              if (ctx.measureText(test2).width <= maxWidth || line === '') {
+                line = test2
+              } else {
+                lines.push(line)
+                line = ch
+              }
+            }
+          } else {
+            lines.push(line)
+            line = token.trimStart()
+          }
+        }
+      }
+      if (line) lines.push(line)
+    }
+    return lines
   }
 
   return (
@@ -269,86 +314,33 @@ export default function App() {
                 const vx = e.clientX - rect.left
                 const vy = e.clientY - rect.top
                 const isBackground = e.currentTarget === e.target
-                if (tool === 'highlight' && isBackground) {
-                  e.stopPropagation()
-                  const start = viewPointToPdf(vx, vy, currentPage, zoom)
-                  const id = crypto.randomUUID()
-                  setDrawingHL({ id, startPdfX: start.x, startPdfY: start.y })
-                  setAnnotations((prev) => ([...prev, { id, pageIndex, type: 'highlight', x: start.x, y: start.y, width: 0, height: 0, color: 'rgba(255,235,59,0.5)', rotation: 0 }]))
-                  setSelectedId(id)
-                  setEditingId(null)
-                } else if (tool === 'text' && isBackground) {
-                  e.stopPropagation()
-                  const start = viewPointToPdf(vx, vy, currentPage, zoom)
-                  const id = crypto.randomUUID()
-                  setDrawingText({ id, startPdfX: start.x, startPdfY: start.y })
-                  setAnnotations((prev) => ([...prev, { id, pageIndex, type: 'text', x: start.x, y: start.y, width: 0, height: 0, text: '', fontSize: 18, color: '#111', rotation: 0 }]))
-                  setSelectedId(id)
-                  setEditingId(null)
-                } else if (isBackground) {
+                if (isBackground) {
                   // move/type: clicking pure background deselects
                   setSelectedId(null)
                   setEditingId(null)
                 }
               }}
-              onMouseMove={(e) => {
-                const el = overlayRef.current!
-                const rect = el.getBoundingClientRect()
-                const vx = e.clientX - rect.left
-                const vy = e.clientY - rect.top
-                if (drawingHL && currentPage && tool === 'highlight') {
-                  const cur = viewPointToPdf(vx, vy, currentPage, zoom)
-                  const x = Math.min(drawingHL.startPdfX, cur.x)
-                  const y = Math.min(drawingHL.startPdfY, cur.y)
-                  const w = Math.abs(cur.x - drawingHL.startPdfX)
-                  const h = Math.abs(cur.y - drawingHL.startPdfY)
-                  setAnnotations((prev) => prev.map(a => a.id === drawingHL.id ? { ...a, x, y, width: w, height: h } : a))
-                }
-                if (drawingText && currentPage && tool === 'text') {
-                  const cur = viewPointToPdf(vx, vy, currentPage, zoom)
-                  const x = Math.min(drawingText.startPdfX, cur.x)
-                  const y = Math.min(drawingText.startPdfY, cur.y)
-                  const w = Math.abs(cur.x - drawingText.startPdfX)
-                  const h = Math.abs(cur.y - drawingText.startPdfY)
-                  setAnnotations((prev) => prev.map(a => a.id === drawingText.id ? { ...a, x, y, width: w, height: h } : a))
-                }
-              }}
-              onMouseUp={() => {
-                if (tool === 'highlight' && drawingHL) {
-                  // ensure minimal size
-                  setAnnotations((prev) => prev.map(a => {
-                    if (a.id !== drawingHL.id) return a
-                    const w = Math.max(8, a.width)
-                    const h = Math.max(8, a.height)
-                    return { ...a, width: w, height: h }
-                  }))
-                  setDrawingHL(null)
-                }
-                if (tool === 'text' && drawingText) {
-                  setAnnotations((prev) => prev.map(a => {
-                    if (a.id !== drawingText.id) return a
-                    let { x, y, width: w, height: h } = a
-                    const minW = 200
-                    const minH = 40
-                    if (w < minW) {
-                      // expand to the right
-                      w = minW
-                    }
-                    if (h < minH) {
-                      h = minH
-                    }
-                    return { ...a, x, y, width: w, height: h }
-                  }))
-                  setDrawingText(null)
-                }
-              }}
+              
             >
+              {/* Konva Stage for highlight-only interactions */}
+              <KonvaHighlights
+                page={currentPage}
+                zoom={zoom}
+                annotations={annotations}
+                setAnnotations={setAnnotations}
+                selectedId={selectedId}
+                setSelectedId={setSelectedId}
+                tool={tool}
+                commit={commit}
+                setTool={setTool}
+              />
               {annotations.filter(a => a.pageIndex === pageIndex).map((a) => (
-                <AnnotationItem
-                  key={a.id}
-                  a={a}
-                  page={currentPage}
-                  zoom={zoom}
+                (a.type !== 'highlight' && a.type !== 'text') ? (
+                  <AnnotationItem
+                    key={a.id}
+                    a={a}
+                    page={currentPage}
+                    zoom={zoom}
                   selected={selectedId === a.id}
                   editing={false}
                   onSelect={() => {
@@ -378,6 +370,7 @@ export default function App() {
                     return arr
                   })}
                 />
+                ) : null
               ))}
             </div>
           )}
