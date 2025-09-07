@@ -21,7 +21,8 @@
       "Bash(sed:*)",
       "Bash(grep:*)",
       "Bash(git checkout:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx:*)"
     ],
     "deny": [],
     "ask": []
